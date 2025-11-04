@@ -2,8 +2,8 @@
 // conexao.php (versão MySQLi)
 
 $host = "localhost";
-$user = "root";
-$pass = "";
+$user = "seuUsuário";
+$pass = "suaSenha";
 $db   = "irrigacao";
 
 $conn = new mysqli($host, $user, $pass, $db);
@@ -15,3 +15,4 @@ if ($conn->connect_error) {
 
 // Define charset
 $conn->set_charset("utf8mb4");
+
