@@ -1,0 +1,62 @@
+#define SENSOR_PIN A0
+
+// Valores de calibração exemplo (leia no seu sensor e substitua se necessário)
+const int DRY_VALUE = 800;   // leitura com solo seco (exemplo)
+const int WET_VALUE = 300;   // leitura com solo muito úmido (exemplo)
+
+// Se o seu sensor retorna VALOR MAIOR = SOLO SECO, deixe INVERT = true.
+// Se o seu sensor retorna VALOR MAIOR = SOLO UMIDO, deixe INVERT = false.
+const bool INVERT = true;
+
+int leituraRaw = 0;
+float umidadePerc = 0.0;
+
+void setup() {
+  Serial.begin(9600);
+}
+
+void loop() {
+  leituraRaw = analogRead(SENSOR_PIN);
+
+  // Garante intervalo correto entre os valores de calibração
+  int lowVal = min(DRY_VALUE, WET_VALUE);
+  int highVal = max(DRY_VALUE, WET_VALUE);
+  if (highVal == lowVal) {
+    Serial.println("Erro calibracao: DRY_VALUE igual a WET_VALUE");
+    delay(1000);
+    return;
+  }
+
+  // Mapeia leitura bruta para 0..100% considerando a inversão apropriada
+  if (INVERT) {
+    // leitura maior significa solo mais seco -> inverte o mapeamento
+    umidadePerc = (float)(highVal - leituraRaw) * 100.0 / (float)(highVal - lowVal);
+  } else {
+    // leitura maior significa solo mais úmido
+    umidadePerc = (float)(leituraRaw - lowVal) * 100.0 / (float)(highVal - lowVal);
+  }
+
+  // Limita a 0..100%
+  if (umidadePerc < 0.0) umidadePerc = 0.0;
+  if (umidadePerc > 100.0) umidadePerc = 100.0;
+
+  // Classificação do estado do solo
+  const char* status;
+  if (umidadePerc < 30.0) {
+    status = "Solo seco";
+  } else if (umidadePerc < 70.0) {
+    status = "Umidade moderada";
+  } else {
+    status = "Solo umido";
+  }
+
+  // Saída no Serial Monitor
+  Serial.print("Leitura bruta: ");
+  Serial.print(leituraRaw);
+  Serial.print("  Umidade: ");
+  Serial.print(umidadePerc, 1);
+  Serial.print(" %  Status: ");
+  Serial.println(status);
+
+  delay(500);
+}
