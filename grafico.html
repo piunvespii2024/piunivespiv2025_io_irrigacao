@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>📈 Gráfico em Tempo Real — Irrigação</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Temas -->
+  <link id="theme-bootstrap" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link id="theme-material" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" disabled>
+  <link rel="stylesheet" href="css/custom-theme.css">
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>📈 Gráfico em Tempo Real</h1>
+    <div class="theme-switch">
+      <button class="btn btn-sm btn-primary" onclick="setTheme('bootstrap')">Bootstrap</button>
+      <button class="btn btn-sm btn-secondary" onclick="setTheme('material')">Material</button>
+      <button class="btn btn-sm btn-dark" onclick="toggleDarkMode()">🌙 Dark</button>
+      <a href="index.php" class="btn btn-outline-secondary">⬅ Voltar</a>
+    </div>
+  </header>
+
+  <main class="container my-4">
+    <div class="card p-3">
+      <h2 class="h6">Umidade do Solo em Tempo Real</h2>
+      <canvas id="graficoTempoReal" height="350"></canvas>
+      <div class="legend-fixed d-flex justify-content-center gap-3 mt-3 flex-wrap">
+        <div class="legend-item"><div class="legend-box bg-success"></div> Umidade Solo</div>
+        <div class="legend-item"><div class="legend-box bg-warning"></div> Status Solo</div>
+      </div>
+      <div id="info" class="mt-2 text-muted small"></div>
+      <div id="error" class="error text-danger fw-bold" style="display:none;"></div>
+    </div>
+  </main>
+
+  <script>
+    // Alternância de temas
+    function setTheme(theme) {
+      const bootstrap = document.getElementById('theme-bootstrap');
+      const material  = document.getElementById('theme-material');
+      if (theme === 'bootstrap') {
+        bootstrap.removeAttribute('disabled');
+        material.setAttribute('disabled', 'true');
+      } else {
+        material.removeAttribute('disabled');
+        bootstrap.setAttribute('disabled', 'true');
+      }
+    }
+    function toggleDarkMode(){
+      document.body.classList.toggle("dark-mode");
+      if(document.body.classList.contains("dark-mode")){
+        localStorage.setItem("darkMode","true");
+      } else {
+        localStorage.removeItem("darkMode");
+      }
+    }
+    window.onload = () => {
+      if(localStorage.getItem("darkMode")==="true"){
+        document.body.classList.add("dark-mode");
+      }
+    };
+
+    // ===========================
+    // Gráfico em tempo real
+    // ===========================
+    const ctx = document.getElementById('graficoTempoReal').getContext('2d');
+    const graficoTempoReal = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          { label: 'Umidade Solo (%)', borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.06)', data: [], tension:0.2, fill:true, yAxisID:'y' },
+          { label: 'Status do Solo', borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.2)', data: [], stepped:true, fill:false, yAxisID:'y1' }
+        ]
+      },
+      options: {
+        responsive:true, animation:false, interaction:{ mode:'index', intersect:false },
+        scales:{
+          y:{ beginAtZero:true, max:100, title:{display:true,text:'Umidade (%)'} },
+          y1:{ type:'linear', position:'right', min:0, max:3,
+            ticks:{ stepSize:1, callback:v=>(['Seco','Moderado','Úmido','Encharcado'][v] ?? v) },
+            title:{display:true,text:'Nível do Solo'}, grid:{ drawOnChartArea:false }
+          }
+        }
+      }
+    });
+
+    // ===========================
+    // Atualização periódica
+    // ===========================
+    const infoEl = document.getElementById('info');
+    const errorEl = document.getElementById('error');
+
+    function clearError(){ errorEl.style.display='none'; errorEl.textContent=''; }
+    function showError(msg){ errorEl.style.display='block'; errorEl.textContent=msg; }
+
+    async function atualizarGrafico(){
+      try {
+        const res = await fetch('api/get_dados.php?limit=20', { cache: 'no-store' });
+        if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data || !data.sucesso) throw new Error('Resposta inválida do servidor');
+
+        const leituras = Array.isArray(data.leituras) ? data.leituras : [];
+        const labels = leituras.map(r => r.created_at || r.data_registro);
+        const umidade = leituras.map(r => parseFloat(r.umidade_solo ?? r.umidade));
+        const status = leituras.map(r => {
+          const s = String(r.status || '').toLowerCase();
+          if (s.includes('seco')) return 0;
+          if (s.includes('moderad')) return 1;
+          if (s.includes('úmido') || s.includes('umido')) return 2;
+          if (s.includes('encharcado')) return 3;
+          return null;
+        });
+
+        graficoTempoReal.data.labels = labels;
+        graficoTempoReal.data.datasets[0].data = umidade;
+        graficoTempoReal.data.datasets[1].data = status;
+        graficoTempoReal.update();
+
+        clearError();
+        infoEl.textContent = `Última atualização: ${new Date().toLocaleTimeString()}`;
+      } catch (err) {
+        console.error(err);
+        showError('Erro ao atualizar gráfico: ' + err.message);
+      }
+    }
+
+    // Atualiza a cada 5 segundos
+    setInterval(atualizarGrafico, 5000);
+    atualizarGrafico();
+  </script>
+</body>
+</html>
